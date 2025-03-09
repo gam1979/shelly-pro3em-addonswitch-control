@@ -19,11 +19,14 @@ function getTimestamp() {
 // Function to check if current time is within allowed hours
 function isWithinAllowedHours() {
     if (!useOffTimes) {
+        print("[" + getTimestamp() + "] Time restrictions are disabled. Heater is allowed to run at any time.");
         return true;  // Always allow if time restrictions are disabled
     }
     let now = new Date();
     let hour = now.getHours();
-    return hour >= offTimeHourEnd && hour < offTimeHourStart;
+    let result = hour >= offTimeHourEnd && hour < offTimeHourStart;
+    print("[" + getTimestamp() + "] Checking time restrictions: " + (result ? "Heater is allowed to run" : "Heater is not allowed to run"));
+    return result;
 }
 
 // Function to handle errors and ensure heater safety
