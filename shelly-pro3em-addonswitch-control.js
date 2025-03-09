@@ -2,13 +2,13 @@
 let powerThreshold = -1500; // Power threshold for excess energy (negative = export)
 let checkIntervalInMinutes = 5; // Check interval in minutes (default: 5)
 let useOffTimes = true;     // Whether to use time restrictions (default: true)
-let offTimeHourStart = 20;  // Hour when heater should stop (24h format, default: 20 = 8 PM)
-let offTimeHourEnd = 6;     // Hour when heater can start again (24h format, default: 6 = 6 AM)
+let offTimeHourStart = 20;  // Hour when switch should stop (24h format, default: 20 = 8 PM)
+let offTimeHourEnd = 6;     // Hour when switch can start again (24h format, default: 6 = 6 AM)
 let errorCount = 0; // Track consecutive errors
-let maxErrors = 3; // Maximum number of consecutive errors before forcing heater off
+let maxErrors = 3; // Maximum number of consecutive errors before forcing switch off
 
 // Variables
-let isHeaterOn = false;
+let isSwitchOn = false;
 let isInitialStartup = true;  // Add flag to track initial startup
 
 // Function to get current timestamp
@@ -19,27 +19,27 @@ function getTimestamp() {
 // Function to check if current time is within allowed hours
 function isWithinAllowedHours() {
     if (!useOffTimes) {
-        print("[" + getTimestamp() + "] Time restrictions are disabled. Heater is allowed to run at any time.");
+        print("[" + getTimestamp() + "] Time restrictions are disabled. Switch is allowed to be turned on/off at any time.");
         return true;  // Always allow if time restrictions are disabled
     }
     let now = new Date();
     let hour = now.getHours();
     let result = hour >= offTimeHourEnd && hour < offTimeHourStart;
-    print("[" + getTimestamp() + "] Checking time restrictions: " + (result ? "Heater is allowed to run" : "Heater is not allowed to run"));
+    print("[" + getTimestamp() + "] Checking time restrictions: " + (result ? "Switch control enabled" : "Switch control disabled"));
     return result;
 }
 
-// Function to handle errors and ensure heater safety
+// Function to handle errors and ensure switch safety
 function handleError(errorMessage, context) {
     errorCount++;
     let errorLog = "[" + getTimestamp() + "] ERROR in " + context + ": " + errorMessage;
     print(errorLog);
     
-    // If we've had too many consecutive errors, force heater off
+    // If we've had too many consecutive errors, force switch off
     if (errorCount >= maxErrors) {
-        print("[" + getTimestamp() + "] Too many consecutive errors, forcing heater off for safety");
-        turnOffHeater();
-        errorCount = 0; // Reset error count after forcing heater off
+        print("[" + getTimestamp() + "] Too many consecutive errors, forcing switch off for safety");
+        turnOffSwitch();
+        errorCount = 0; // Reset error count after forcing switch off
     }
 }
 
@@ -107,11 +107,11 @@ function checkSwitchStatus() {
         // Only turn off switch if it's on during initial startup
         if (isInitialStartup && result && result.output) {
             print("[" + getTimestamp() + "] Switch is on during startup, turning it off...");
-            turnOffHeater();
+            turnOffSwitch();
         } else {
-            // Update isHeaterOn state based on actual switch status
-            isHeaterOn = result && result.output;
-            print("[" + getTimestamp() + "] Heater state updated:", isHeaterOn ? "ON" : "OFF");
+            // Update isSwitchOn state based on actual switch status
+            isSwitchOn = result && result.output;
+            print("[" + getTimestamp() + "] Switch state updated:", isSwitchOn ? "ON" : "OFF");
         }
     });
 }
@@ -122,9 +122,9 @@ function checkPower() {
     
     // Check if we're within allowed hours
     if (!isWithinAllowedHours()) {
-        if (isHeaterOn) {
-            print("[" + getTimestamp() + "] Outside allowed hours (06:00-20:00), turning off heater");
-            turnOffHeater();
+        if (isSwitchOn) {
+            print("[" + getTimestamp() + "] Outside allowed hours, turning off switch");
+            turnOffSwitch();
         }
         return;
     }
@@ -144,14 +144,14 @@ function checkPower() {
             print("  Phase C:", result.c_act_power, "W");
             print("  Total Power:", totalPower, "W (Threshold:", powerThreshold, "W)");
             
-            if (totalPower < powerThreshold && !isHeaterOn) {
-                print("[" + getTimestamp() + "] Power below threshold and heater is off. Turning on heater...");
-                turnOnHeater();
-            } else if (isHeaterOn && totalPower >= 0) {
-                print("[" + getTimestamp() + "] Power above 0W and heater is on. Turning off heater...");
-                turnOffHeater();
+            if (totalPower < powerThreshold && !isSwitchOn) {
+                print("[" + getTimestamp() + "] Power below threshold and switch is off. Turning on switch...");
+                turnOnSwitch();
+            } else if (isSwitchOn && totalPower >= 0) {
+                print("[" + getTimestamp() + "] Power above 0W and switch is on. Turning off switch...");
+                turnOffSwitch();
             } else {
-                print("[" + getTimestamp() + "] No action needed. Power:", totalPower, "W, Heater:", isHeaterOn ? "ON" : "OFF");
+                print("[" + getTimestamp() + "] No action needed. Power:", totalPower, "W, Switch:", isSwitchOn ? "ON" : "OFF");
             }
             errorCount = 0; // Reset error count on successful operation
         } else {
@@ -168,45 +168,45 @@ function logSwitchState(state) {
     print("[" + timestamp + "] Switch turned " + action);
 }
 
-// Function to turn on heater
-function turnOnHeater() {
-    if (isHeaterOn) {
-        print("[" + getTimestamp() + "] Heater is already on, skipping turn-on");
+// Function to turn on switch
+function turnOnSwitch() {
+    if (isSwitchOn) {
+        print("[" + getTimestamp() + "] Switch is already on, skipping turn-on");
         return;
     }
     
     // Check time restrictions before turning on
     if (!isWithinAllowedHours()) {
-        print("[" + getTimestamp() + "] Cannot turn on heater: Outside allowed hours (06:00-20:00)");
+        print("[" + getTimestamp() + "] Cannot turn on switch: Outside allowed hours");
         return;
     }
     
-    print("[" + getTimestamp() + "] Sending command to turn on heater...");
+    print("[" + getTimestamp() + "] Sending command to turn on switch...");
     Shelly.call("Switch.Set", { id: 100, on: true }, function(result, error_code, error_message) {
         if (error_code !== 0) {
             handleError(error_message, "Switch.Set (ON)");
             return;
         }
         
-        isHeaterOn = true;
+        isSwitchOn = true;
         logSwitchState(true);
         errorCount = 0; // Reset error count on successful operation
     });
 }
 
-// Function to turn off heater
-function turnOffHeater() {
-    print("[" + getTimestamp() + "] Sending command to turn off heater...");
+// Function to turn off switch
+function turnOffSwitch() {
+    print("[" + getTimestamp() + "] Sending command to turn off switch...");
     Shelly.call("Switch.Set", { id: 100, on: false }, function(result, error_code, error_message) {
         if (error_code !== 0) {
             handleError(error_message, "Switch.Set (OFF)");
             return;
         }
         
-        isHeaterOn = false;
+        isSwitchOn = false;
         logSwitchState(false);
         errorCount = 0; // Reset error count on successful operation
-        print("[" + getTimestamp() + "] Heater turned off successfully");
+        print("[" + getTimestamp() + "] Switch turned off successfully");
     });
 }
 
